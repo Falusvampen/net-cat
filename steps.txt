@@ -1,0 +1,9 @@
+Main function, take in os.Args to change port number
+start the server using main function
+
+created startserver to start the server using main function and connect to given port,
+while the server is running, welcome messages will be sent to the active server and the clients will
+recive welcome message and be asked to write a username, wich is done through client file
+
+
+
