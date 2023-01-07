@@ -1,0 +1,187 @@
+package main
+
+import (
+	netcat "TCPChat/program.go"
+	"bufio"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"strings"
+	"sync"
+	"time"
+)
+
+// for making sure that port is just numbers
+func CheckIfNum(s string) bool {
+	for _, v := range s {
+		if v > 57 || v < 48 {
+			return false
+		}
+	}
+	return true
+}
+func main() {
+	args := os.Args
+	// making sure that arguments are correct
+	if len(args) > 2 {
+		fmt.Println("[USAGE]: ./TCPChat $port")
+		return
+	}
+	if len(args) == 2 && len(args[1]) > 2 && len(args[1]) < 6 {
+		if args[1][0:1] != ":" {
+			fmt.Println("You need to add a ':' (colon) at the beginning of the port")
+			fmt.Printf("\n")
+			fmt.Println("[USAGE]: ./TCPChat $port")
+			return
+		}
+		if !CheckIfNum(args[1][1:]) {
+			fmt.Println("Invalid type of port")
+			fmt.Printf("\n")
+			fmt.Println("[USAGE]: ./TCPChat $port")
+			return
+		}
+		fmt.Println("Listening on the port " + args[1])
+		netcat.Server(args[1])
+		return
+	}
+	fmt.Println("Listening on the port :8989")
+	netcat.Server(":8989")
+}
+
+var Clients = make(map[string]net.Conn, 10)
+var Chat []Message
+var Connections int
+
+type Message struct {
+	Name string
+	Time string
+	Text string
+}
+
+// net-cat.Server opens up a net-cat server. Takes a port as string argument, if invalid port or empty port
+// it will open up a server at port "":8989"
+func Server(port string) {
+	ln, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	var mutex sync.Mutex
+	// for keeping track of number of clients and making sure it doesn't go higher than 10
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Println(err)
+		}
+		if Connections == 10 {
+			conn.Write([]byte("Sorry, server connection limit is 10.. Bye!\n"))
+			conn.Close()
+			continue
+		}
+		Connections++
+		// using goroutine to handle multiple connections concurrently
+		// mutex has to be pointed to if used somewhere else
+		go ClientHandle(conn, &mutex)
+	}
+}
+
+// penguin() just loads the welcome-message.txt file, with the welcome message to the new client
+func penguin() []byte {
+	data, err := os.ReadFile("program.go/welcome-message.txt")
+	if err != nil {
+		fmt.Println(err)
+	}
+	return data
+}
+
+// getName fetches the name that the client has inputed and then returns it
+func getName(conn net.Conn, mutex *sync.Mutex) string {
+	mutex.Lock()
+	conn.Write(penguin())
+	mutex.Unlock()
+EmptyName:
+	name, _ := bufio.NewReader(conn).ReadString('\n')
+	if name == "\n" {
+		conn.Write([]byte("You can't have an empty name!\nPlease retype your name: "))
+		goto EmptyName
+	}
+	name = strings.ReplaceAll(name, "\n", "")
+	return name
+}
+
+// makes Message struct into nice string and sends to a specific client
+func writeMessage(conn net.Conn, msg Message) {
+	str := "[" + msg.Time + "][" + msg.Name + "]:" + msg.Text + "\n"
+	conn.Write([]byte(str))
+}
+
+// function to display the chat history to someone new joining
+func displayHistory(conn net.Conn) {
+	for _, v := range Chat {
+		writeMessage(conn, v)
+	}
+}
+
+// Broadcasts messages from the server for example if someone joins
+func serverBroadcast(str string) {
+	for _, v := range Clients {
+		v.Write([]byte(str + "\n"))
+	}
+}
+
+// Broadcasts messages sent by any client
+// if the sender is also the client terminal goes one line up because it was sent before
+// also appends new messages to chatlog so they can be sent to a new person that joins
+func clientBroadcast(conn net.Conn, msg Message, name string) {
+	for k, v := range Clients {
+		if k == name {
+			conn.Write([]byte("\033[A"))
+		}
+		writeMessage(v, msg)
+		Chat = append(Chat, msg)
+	}
+}
+
+// Getting name to the client that connected and waiting for inputs
+// locking and unlocking Mutex so only one client can access variables/goroutine at once
+func ClientHandle(conn net.Conn, mutex *sync.Mutex) {
+	name := getName(conn, mutex)
+	mutex.Lock()
+	serverBroadcast(name + " joined the chat...")
+	Clients[name] = conn
+	displayHistory(conn)
+	mutex.Unlock()
+	for {
+		text, err := bufio.NewReader(conn).ReadString('\n')
+		text = strings.ReplaceAll(text, "\n", "")
+		mutex.Lock()
+		// goes to break if there is an error because it will be someone disconnecting
+		if err != nil {
+			mutex.Unlock()
+			goto Break
+		}
+		// filling msg struct
+		msg := Message{
+			Name: name,
+			Text: text,
+			Time: time.Now().Format("01-02-2006 15:04:05"),
+		}
+		// If the client inputs empty string it will not be broadcasted but the client will see it
+		if text == "" {
+			conn.Write([]byte("\033[A"))
+			writeMessage(conn, msg)
+			mutex.Unlock()
+			continue
+		}
+		clientBroadcast(conn, msg, name)
+		mutex.Unlock()
+	}
+	// Broadcasting X left the chat message and deleting them from clients
+Break:
+	mutex.Lock()
+	serverBroadcast(name + " left the chat...")
+	delete(Clients, name)
+	Connections--
+	mutex.Unlock()
+}
