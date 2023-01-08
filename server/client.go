@@ -8,16 +8,19 @@ import (
 	"sync"
 	"time"
 )
+
 // Shared variables
 var (
 	users   []*User
 	History = []string{}
 	mu      sync.Mutex
 )
+
 type User struct {
 	name string
 	conn net.Conn
 }
+
 // for client to add username and welcome message
 func handleConnection(conn net.Conn) {
 	// First send welcome message and ask for username to client
@@ -36,7 +39,7 @@ func handleConnection(conn net.Conn) {
 		clientMessage(conn, message)
 	}
 	serverMessage(user.name + " has joined the server!\n")
-	fmt.Println(getTime() + " has joined the server as " + user.name + "!")
+	fmt.Println(getTime() + user.name + " has joined the server" + "!")
 	// Continuously read messages from the client and broadcast them
 InputLoop:
 	for {
@@ -60,6 +63,7 @@ InputLoop:
 	// remove user from the list of users and close the connection
 	removeClient(conn, user)
 }
+
 // Function to remove a client from the list of users and close the connection to the client and broadcast it to the other users
 func removeClient(conn net.Conn, user *User) {
 	serverMessage(user.name + " has left the server!\n")
@@ -75,6 +79,7 @@ func removeClient(conn net.Conn, user *User) {
 	mu.Unlock()
 	conn.Close()
 }
+
 // Change the name of the user and broadcast it to the other users
 func changeName(conn net.Conn, user *User, name string) {
 	mu.Lock()
