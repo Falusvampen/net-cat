@@ -8,25 +8,16 @@ import (
 	"sync"
 	"time"
 )
-
 // Shared variables
 var (
 	users   []*User
 	History = []string{}
 	mu      sync.Mutex
 )
-
-// type message struct {
-// 	user    string
-// 	message string
-// 	time    string
-// }
-
 type User struct {
 	name string
 	conn net.Conn
 }
-
 // for client to add username and welcome message
 func handleConnection(conn net.Conn) {
 	// First send welcome message and ask for username to client
@@ -45,7 +36,7 @@ func handleConnection(conn net.Conn) {
 		clientMessage(conn, message)
 	}
 	serverMessage(user.name + " has joined the server!\n")
-	fmt.Println(getTime() + conn.RemoteAddr().String() + " has joined the server as " + user.name + "!")
+	fmt.Println(getTime() + " has joined the server as " + user.name + "!")
 	// Continuously read messages from the client and broadcast them
 InputLoop:
 	for {
@@ -69,7 +60,7 @@ InputLoop:
 	// remove user from the list of users and close the connection
 	removeClient(conn, user)
 }
-
+// Function to remove a client from the list of users and close the connection to the client and broadcast it to the other users
 func removeClient(conn net.Conn, user *User) {
 	serverMessage(user.name + " has left the server!\n")
 	fmt.Println(getTime() + user.name + " has left the server!")
@@ -84,7 +75,6 @@ func removeClient(conn net.Conn, user *User) {
 	mu.Unlock()
 	conn.Close()
 }
-
 // Change the name of the user and broadcast it to the other users
 func changeName(conn net.Conn, user *User, name string) {
 	mu.Lock()
@@ -111,21 +101,4 @@ func randomUserNameColor(username string) string {
 	randSeed := time.Now().UnixNano()
 	randSeed = randSeed % int64(230)
 	return "\033[38;5;" + Itoa(int(randSeed)) + "m" + username + "\033[0m"
-}
-
-// Itoa function because we aren't allowed to use strconv
-func Itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	res := ""
-	for i > 0 {
-		res = string((i%10 + 48)) + res
-		i /= 10
-	}
-	if i < 0 {
-		return "-" + Itoa(-i)
-	} else {
-		return res
-	}
 }
