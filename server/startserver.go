@@ -13,9 +13,8 @@ func StartServer(Port string) error {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// listen on the server and connect to the server
 	defer listener.Close()
-
+	// listen on the server and connect to the server
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
