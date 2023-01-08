@@ -1,4 +1,4 @@
-FROM golang:1.15
+FROM golang:alpine
 
 # Set the working directory to the root of the project
 WORKDIR /app
